@@ -1,6 +1,11 @@
 Processing Kinect Heightmap
 
 Dependencies:
-- Eclipse IDE for Java Developers 64Bit http://www.eclipse.org/downloads/
-- GLGraphics http://glgraphics.sourceforge.net/
-- toxiclibs http://toxiclibs.org/
+- Eclipse IDE for Java Developers 64Bit
+	http://www.eclipse.org/downloads/
+- GLGraphics
+	http://glgraphics.sourceforge.net/
+- ControlP5
+	http://www.sojamo.de/libraries/controlP5/
+- toxiclibs
+	http://toxiclibs.org/
