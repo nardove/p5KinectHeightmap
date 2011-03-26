@@ -20,7 +20,6 @@
 		</attributes>
 	</classpathentry>
 	<classpathentry kind="lib" path="lib/opengl.jar"/>
-	<classpathentry kind="lib" path="lib/PeasyCam.jar"/>
 	<classpathentry kind="lib" path="lib/toxiclibscore.jar"/>
 	<classpathentry kind="lib" path="lib/openkinect.jar">
 		<attributes>

@@ -9,25 +9,11 @@ import org.openkinect.processing.*;
 import toxi.math.*;
 import toxi.geom.*;
 
-import peasy.*;
 import controlP5.*;
 
 
 
 public class LinesCloud extends PApplet {
-	
-	Kinect kinect;
-	
-	//PeasyCam cam;
-	ControlP5 controlP5;
-	Slider distanceThresholdSlider;
-	Slider kinectTiltSlider;
-	Slider cameraDistanceSlider;
-	Slider2D cameraRotationSlider;
-	PMatrix3D currCameraMatrix;
-	PGraphics3D g3;
-	
-	GLModel points;
 	
 	static final int GRID_WIDTH			= 640;
 	static final int GRID_HEIGHT 		= 480;
@@ -36,20 +22,35 @@ public class LinesCloud extends PApplet {
 	
 	static final float EASING			= 0.075f;
 	
+	
+	Kinect kinect;
+	
+	ControlP5 controlP5;
+	Slider distanceThresholdSlider;
+	Slider kinectTiltSlider;
+	Slider cameraDistanceSlider;
+	Slider2D cameraRotationSlider;
+	
+	PMatrix3D currCameraMatrix;
+	PGraphics3D g3;
+	
 	float gridCenterX, gridCenterY;
 	float gridSpaceX, gridSpaceY;
 	float distanceToCenter;
 	float distanceThreshold;
 	
-	int totalPoints;
+	float rot = 0;
 	
-	Vec3D[] pointsPos = new Vec3D[GRID_WIDTH * GRID_HEIGHT];
+	GLModel lines;
+	
+	int totallines;
+	
+	Vec3D[] linesPos = new Vec3D[GRID_WIDTH * GRID_HEIGHT];
 	
 	float[] depthLookUp = new float[2048];
 	
 	boolean saveFrames = false;
 	
-	float rot = 0;
 	
 	
 	
@@ -61,16 +62,162 @@ public class LinesCloud extends PApplet {
 		kinect.start();
 		kinect.enableDepth(true);
 		kinect.processDepthImage(false);
-
-		// Setup scene camera
-		//cam = new PeasyCam( this, 250 );
-		//cam.lookAt( 0, 0, 0, 30 );
-		
 		
 		g3 = (PGraphics3D)g;
 		
+		initGui();
 		
-		// Controls
+		
+		// Get depth lookup table
+		for ( int i = 0; i < depthLookUp.length; i++ ) depthLookUp[i] = rawDepthToCentimeters( i );
+		
+		
+		// Initialize lines mesh
+		gridSpaceX = GRID_WIDTH / GRID_ROWS;
+		gridSpaceY = GRID_HEIGHT / GRID_COLUMNS;
+		
+		gridCenterX = ((GRID_ROWS - 1) * gridSpaceX) / 2;
+		gridCenterY = ((GRID_COLUMNS - 1) * gridSpaceY) / 2;
+		
+		for (int i = 0; i < GRID_ROWS; i++ ) {
+			for (int j = 0; j < GRID_COLUMNS; j++) {
+				int offset = i + j * GRID_ROWS;
+				float x = i * gridSpaceX;
+				float y = j * gridSpaceY;
+				float z = 0.0f;
+		      	Vec3D pv = new Vec3D(x, y, z);
+		      	linesPos[offset] = pv;
+		    }
+		}
+		
+		totallines = GRID_ROWS * GRID_COLUMNS;
+		
+		// Lines GLModel
+		lines = new GLModel(this, totallines, LINES, GLModel.DYNAMIC);
+
+		lines.initColors();
+		lines.beginUpdateColors();
+		for ( int i = 0; i < totallines; i++ ) lines.updateColor( i, 255, 255, 225 );
+		lines.endUpdateColors(); 
+
+		lines.beginUpdateVertices();
+		for ( int i = 0; i < totallines; i++ ) lines.updateVertex( i, linesPos[i].x, linesPos[i].y, linesPos[i].z);
+		lines.endUpdateVertices();   
+		lines.setLineWidth( 2.0f );
+		
+		int totalIndices = GRID_ROWS * 2 * GRID_COLUMNS;  
+		int indices[] = new int[totalIndices];
+		  
+		int n = 0;
+		for ( int col = 0; col < GRID_COLUMNS; col++ ) {
+			for ( int row = 0; row < GRID_ROWS - 1; row++ ) {
+				int offset = col * GRID_ROWS;
+				int n0 = offset + row;
+				int n1 = offset + row + 1;
+				indices[n++] = n0;
+				indices[n++] = n1;
+			}
+		}
+		  
+		lines.initIndices( totalIndices );
+		lines.updateIndices( indices );
+		
+	}
+	
+	
+	
+	public void draw() {
+		int[] depth = kinect.getRawDepth();
+		
+		GLGraphics renderer = (GLGraphics)g;
+	    renderer.beginGL(); 
+	    
+		background( 0 );
+		
+		hint( ENABLE_DEPTH_TEST );
+		
+		beginCamera();
+		camera( 0.0f, 0.0f, cameraDistanceSlider.value(),
+				0.0f, 0.0f, 0.0f, 
+			    0.0f, 1.0f, 0.0f );
+		rotateX( radians(45 - cameraRotationSlider.arrayValue()[1]) );
+		rotateY( radians(45 - cameraRotationSlider.arrayValue()[0]) );
+		
+		// May add this to the gui as a toggle control
+		/*rot += 0.0075f;
+		rotateY( rot );
+		rotateX( sin( frameCount * 0.01f ) * 0.25f );*/
+		
+		
+		// Update lines vertices position in 'z'
+		lines.beginUpdateVertices();
+		for ( int i = 0; i < totallines; i++ ) {
+			float distance = getDistanceAt( (int)linesPos[i].x, (int)linesPos[i].y, depth ) * 2.5f;
+			if ( distance > distanceThreshold || distance == 0 ) distance = distanceThreshold;
+			linesPos[i].z += (distance - linesPos[i].z) * EASING;
+			lines.updateVertex( i, linesPos[i].x, linesPos[i].y, linesPos[i].z );
+		}
+		lines.endUpdateVertices();
+		
+		// Update lines colors
+		lines.beginUpdateColors();
+		for ( int i = 0; i < totallines; i++ ) {		
+			float dt = linesPos[i].z / distanceThreshold;
+			
+			final float c0r = 255;
+			final float c0g = 0;
+			final float c0b = 0;
+			
+			final float c1r = 165;
+			final float c1g = 255;
+			final float c1b = 0;
+			
+			final float c2r = 0;
+			final float c2g = 165;
+			final float c2b = 255;
+			
+			float ctr = (dt < 0.5f) ? c0r * dt * 2 + ( c1r * (0.5f - dt) * 2 ) : c1r * (dt - 0.5f) * 2 + ( c2r * (1 - dt) * 2 );
+			float ctb = (dt < 0.5f) ? c0b * dt * 2 + ( c1b * (0.5f - dt) * 2 ) : c1b * (dt - 0.5f) * 2 + ( c2b * (1 - dt) * 2 );
+			float ctg = (dt < 0.5f) ? c0g * dt * 2 + ( c1g * (0.5f - dt) * 2 ) : c1g * (dt - 0.5f) * 2 + ( c2g * (1 - dt) * 2 );
+			
+			lines.updateColor( i, ctr, ctg, ctb );
+		}
+		lines.endUpdateColors();
+		
+		
+		pushMatrix();
+		translate( -gridCenterX, -gridCenterY, -distanceToCenter );
+		renderer.model( lines );
+		popMatrix();
+		
+		endCamera();
+		
+		renderer.endGL();
+		
+		hint( DISABLE_DEPTH_TEST );
+		
+		//stats();
+		drawGui();
+		
+		
+		// Save frames for movie
+		if ( saveFrames == true ) saveFrame( "line-####.jpg" );
+			
+	}
+	
+	
+	
+	public void stats() {
+		fill( 255 );
+		textMode( SCREEN );
+		String info  = "Kinect FPS: " + (int)kinect.getDepthFPS() + "\n";
+			   info += "Processing FPS: " + (int)frameRate + "\n";
+			   info += "Number of lines: " + totallines + "\n";
+		text( info, 10, 16 );
+	}
+	
+	
+	public void initGui() {
 		controlP5 = new ControlP5( this );
 		controlP5.setAutoDraw( false );
 		distanceThresholdSlider = controlP5.addSlider( "distance threshold", 0, 800 );
@@ -95,167 +242,19 @@ public class LinesCloud extends PApplet {
 		distanceToCenter 	= 200;
 		distanceThreshold 	= distanceThresholdSlider.value();
 		
-		
-		// Get depth lookup table
-		for ( int i = 0; i < depthLookUp.length; i++ ) depthLookUp[i] = rawDepthToCentimeters( i );
-		
-		
-		// Initialize points mesh
-		gridSpaceX = GRID_WIDTH / GRID_ROWS;
-		gridSpaceY = GRID_HEIGHT / GRID_COLUMNS;
-		
-		gridCenterX = ((GRID_ROWS - 1) * gridSpaceX) / 2;
-		gridCenterY = ((GRID_COLUMNS - 1) * gridSpaceY) / 2;
-		
-		for (int i = 0; i < GRID_ROWS; i++ ) {
-			for (int j = 0; j < GRID_COLUMNS; j++) {
-				int offset = i + j * GRID_ROWS;
-				float x = i * gridSpaceX;
-				float y = j * gridSpaceY;
-				float z = 0.0f;
-		      	Vec3D pv = new Vec3D(x, y, z);
-		      	pointsPos[offset] = pv;
-		    }
-		}
-		
-		totalPoints = GRID_ROWS * GRID_COLUMNS;
-		
-		points = new GLModel(this, totalPoints, LINES, GLModel.DYNAMIC);
-
-		  points.initColors();
-		  points.beginUpdateColors();
-		  for ( int i = 0; i < totalPoints; i++ ) points.updateColor( i, 255, 255, 225 );
-		  points.endUpdateColors(); 
-
-		  points.beginUpdateVertices();
-		  for ( int i = 0; i < totalPoints; i++ ) points.updateVertex( i, pointsPos[i].x, pointsPos[i].y, pointsPos[i].z);
-		  points.endUpdateVertices();   
-		  points.setLineWidth( 2.0f );
-		  
-		  int totalIndices = GRID_ROWS * 2 * GRID_COLUMNS;  
-		  int indices[] = new int[totalIndices];
-		  
-		  int n = 0;
-		  for ( int col = 0; col < GRID_COLUMNS; col++ ) {
-		    for ( int row = 0; row < GRID_ROWS - 1; row++ ) {
-		       int offset = col * GRID_ROWS;
-		       int n0 = offset + row;
-		       int n1 = offset + row + 1;
-		       indices[n++] = n0;
-		       indices[n++] = n1;
-		    }
-		  }
-		  
-		  points.initIndices( totalIndices );
-		  points.updateIndices( indices );
-		
 	}
 	
-	
-	
-	public void draw() {
-		/*if ( controlP5.window(this).isMouseOver() )
-			cam.setActive(false);
-		else 
-			cam.setActive(true);*/
-		
-		int[] depth = kinect.getRawDepth();
-		
-		GLGraphics renderer = (GLGraphics)g;
-	    renderer.beginGL(); 
-	    
-		background( 0 );
-		
-		
-		hint( ENABLE_DEPTH_TEST );
-		
-		beginCamera();
-		camera( 0.0f, 0.0f, cameraDistanceSlider.value(),
-				0.0f, 0.0f, 0.0f, 
-			    0.0f, 1.0f, 0.0f );
-		//rotateX( radians(45 - cameraRotationSlider.arrayValue()[1]) );
-		//rotateY( radians(45 - cameraRotationSlider.arrayValue()[0]) );
-		rot += 0.0075f;
-		rotateY( rot );
-		rotateX( sin( frameCount * 0.01f ) * 0.25f );
-		
-		points.beginUpdateVertices();
-		for ( int i = 0; i < totalPoints; i++ ) {
-			float distance = getDistanceAt( (int)pointsPos[i].x, (int)pointsPos[i].y, depth ) * 2.5f;
-			if ( distance > distanceThreshold || distance == 0 ) distance = distanceThreshold;
-			pointsPos[i].z += (distance - pointsPos[i].z) * EASING;
-			points.updateVertex( i, pointsPos[i].x, pointsPos[i].y, pointsPos[i].z );
-		}
-		points.endUpdateVertices();
-		
-		
-		points.beginUpdateColors();
-		for ( int i = 0; i < totalPoints; i++ ) {		
-			float dt = pointsPos[i].z / distanceThreshold;
-			
-			final float c0r = 255;
-			final float c0g = 0;
-			final float c0b = 0;
-			
-			final float c1r = 165;
-			final float c1g = 255;
-			final float c1b = 0;
-			
-			final float c2r = 0;
-			final float c2g = 165;
-			final float c2b = 255;
-			
-			float ctr = (dt < 0.5f) ? c0r * dt * 2 + ( c1r * (0.5f - dt) * 2 ) : c1r * (dt - 0.5f) * 2 + ( c2r * (1 - dt) * 2 );
-			float ctb = (dt < 0.5f) ? c0b * dt * 2 + ( c1b * (0.5f - dt) * 2 ) : c1b * (dt - 0.5f) * 2 + ( c2b * (1 - dt) * 2 );
-			float ctg = (dt < 0.5f) ? c0g * dt * 2 + ( c1g * (0.5f - dt) * 2 ) : c1g * (dt - 0.5f) * 2 + ( c2g * (1 - dt) * 2 );
-			
-			points.updateColor( i, ctr, ctg, ctb );
-		}
-		points.endUpdateColors();
-		
-		
-		pushMatrix();
-		translate( -gridCenterX, -gridCenterY, -distanceToCenter );
-		renderer.model( points );
-		popMatrix();
-		
-		endCamera();
-		
-		renderer.endGL();
-		
-		//stats();
-		gui();
-		
-		
-		// Save frames
-		if ( saveFrames == true ) saveFrame( "line-####.jpg" );
-			
-	}
-	
-	
-	
-	public void stats() {
-		fill( 255 );
-		textMode( SCREEN );
-		String info  = "Kinect FPS: " + (int)kinect.getDepthFPS() + "\n";
-			   info += "Processing FPS: " + (int)frameRate + "\n";
-			   info += "Number of Points: " + totalPoints + "\n";
-		text( info, 10, 16 );
-	}
-	
-	public void gui() {
-		hint( DISABLE_DEPTH_TEST );
-		
+	public void drawGui() {
 		currCameraMatrix = new PMatrix3D( g3.camera );
+		
 		camera();
 		controlP5.draw();
-		g3.camera = currCameraMatrix;
 		
-		//System.out.println( slider2d.arrayValue()[0] );
-		distanceThreshold = distanceThresholdSlider.value();
-		
+		g3.camera 			= currCameraMatrix;
+		distanceThreshold 	= distanceThresholdSlider.value();
 		kinect.tilt( kinectTiltSlider.value() );
 	}
+	
 	
 	
 	public float getDistanceAt( int x, int y, int[] depth ) {
@@ -278,6 +277,7 @@ public class LinesCloud extends PApplet {
 	}
 	
 	
+	// not in use
 	public float rawDepthToMeters( int depthValue ) {
 		if ( depthValue < 2047 ) {
 			return (float)(1.0f / ((double)(depthValue) * -0.0030711016 + 3.3309495161 ));
@@ -299,7 +299,6 @@ public class LinesCloud extends PApplet {
 		result.z = (float)(depth);
 		return result;
 	}
-	
 	
 	
 	public void stop() {
