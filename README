@@ -1,8 +1,7 @@
-Processing Kinect Heightmap
+Kinect Heightmap
+This is a Processing project build using Eclipse IDE for Java Developers 64Bit
 
 Dependencies:
-- Eclipse IDE for Java Developers 64Bit
-	http://www.eclipse.org/downloads/
 - GLGraphics
 	http://glgraphics.sourceforge.net/
 - ControlP5
