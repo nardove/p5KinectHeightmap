@@ -92,7 +92,7 @@ public class LinesCloud extends PApplet {
 		
 		totallines = GRID_ROWS * GRID_COLUMNS;
 		
-		// Lines GLModel
+		// Lines setup
 		lines = new GLModel(this, totallines, LINES, GLModel.DYNAMIC);
 
 		lines.initColors();
@@ -176,9 +176,14 @@ public class LinesCloud extends PApplet {
 			final float c2g = 165;
 			final float c2b = 255;
 			
-			float ctr = (dt < 0.5f) ? c0r * dt * 2 + ( c1r * (0.5f - dt) * 2 ) : c1r * (dt - 0.5f) * 2 + ( c2r * (1 - dt) * 2 );
-			float ctb = (dt < 0.5f) ? c0b * dt * 2 + ( c1b * (0.5f - dt) * 2 ) : c1b * (dt - 0.5f) * 2 + ( c2b * (1 - dt) * 2 );
-			float ctg = (dt < 0.5f) ? c0g * dt * 2 + ( c1g * (0.5f - dt) * 2 ) : c1g * (dt - 0.5f) * 2 + ( c2g * (1 - dt) * 2 );
+			//float ctr = (dt < 0.5f) ? c0r * dt * 2 + ( c1r * (0.5f - dt) * 2 ) : c1r * (dt - 0.5f) * 2 + ( c2r * (1 - dt) * 2 );
+			//float ctb = (dt < 0.5f) ? c0b * dt * 2 + ( c1b * (0.5f - dt) * 2 ) : c1b * (dt - 0.5f) * 2 + ( c2b * (1 - dt) * 2 );
+			//float ctg = (dt < 0.5f) ? c0g * dt * 2 + ( c1g * (0.5f - dt) * 2 ) : c1g * (dt - 0.5f) * 2 + ( c2g * (1 - dt) * 2 );
+			
+			float ctr = (dt < 0.5f) ? c1r * dt * 2 + ( c0r * (0.5f - dt) * 2 ) : c2r * (dt - 0.5f) * 2 + ( c1r * (1 - dt) * 2 );
+			float ctb = (dt < 0.5f) ? c1b * dt * 2 + ( c0b * (0.5f - dt) * 2 ) : c2b * (dt - 0.5f) * 2 + ( c1b * (1 - dt) * 2 );
+			float ctg = (dt < 0.5f) ? c1g * dt * 2 + ( c0g * (0.5f - dt) * 2 ) : c2g * (dt - 0.5f) * 2 + ( c1g * (1 - dt) * 2 );
+			
 			
 			lines.updateColor( i, ctr, ctg, ctb );
 		}
