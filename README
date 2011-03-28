@@ -2,6 +2,8 @@ Kinect Heightmap
 This is a Processing project build using Eclipse IDE for Java Developers 64Bit
 
 Dependencies:
+- OpenKinect
+	http://www.shiffman.net/p5/kinect/
 - GLGraphics
 	http://glgraphics.sourceforge.net/
 - ControlP5
